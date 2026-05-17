@@ -31,12 +31,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest        # Apple Silicon
+          - platform: macos-latest        # Apple Silicon (M1/M2/M3/M4)
             target: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin"
-          - platform: macos-13            # Intel
-            target: x86_64-apple-darwin
-            args: "--target x86_64-apple-darwin"
+          # Intel Mac (macos-13 runner) was removed 2026-05-18 because the
+          # GitHub-hosted Intel pool has multi-hour queue spikes that block
+          # the whole release. The pre-2020 Intel Mac install base is
+          # already shrinking fast; reintroduce only if a specific client
+          # asks for it.
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             args: ""
