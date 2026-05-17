@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# env / secrets
+.env
+.env.local
+*.pem
+*.p12
+*.keystore

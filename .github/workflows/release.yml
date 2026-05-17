@@ -1,0 +1,127 @@
+name: release
+
+# Builds Drovix Portal desktop for Windows, macOS (Intel + Apple Silicon),
+# and Linux on every `v*.*.*` tag, then attaches the artifacts to a draft
+# GitHub Release. Manual `workflow_dispatch` lets you smoke-test the build
+# matrix without cutting a tag.
+#
+# First few releases ship unsigned: the workflow runs without the Apple
+# Developer / Windows EV cert secrets, and the user sees a one-time OS
+# warning on first launch. When the certs are bought, set the secrets
+# listed below (APPLE_*, WINDOWS_*) and the same workflow will start
+# producing signed + notarized builds with no further changes.
+#
+# Tauri's own updater signing IS active from day one — that's a separate
+# keypair (`TAURI_SIGNING_PRIVATE_KEY`) used so future auto-updates can be
+# verified against the public key embedded in the app. Without it the
+# updater plugin would refuse to install anything.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest        # Apple Silicon
+            target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-13            # Intel
+            target: x86_64-apple-darwin
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ""
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # Tauri demands a frontendDist on disk even when the window URL is
+      # remote, so we materialize the placeholder html the repo expects.
+      - name: Ensure frontendDist placeholder
+        shell: bash
+        run: |
+          mkdir -p dist
+          [ -f dist/index.html ] || echo '<!DOCTYPE html><meta charset="utf-8"><title>Drovix Portal</title>' > dist/index.html
+
+      - name: Build Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # Tauri updater signing — present from day one so the public key
+          # embedded in the app matches the artifacts we publish. The
+          # private key + password come from repo secrets.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Optional: Apple Developer code signing + notarization. Leave
+          # these unset for unsigned releases — the action skips signing
+          # when they're missing.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Optional: Windows EV code signing (set when the cert lands).
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Drovix Portal ${{ github.ref_name }}"
+          releaseBody: |
+            Drovix Portal desktop ${{ github.ref_name }}.
+
+            **First-launch warning:** this build is unsigned. Right-click
+            and choose Open on macOS the first time; click "Run anyway" on
+            Windows SmartScreen. Future releases will be code-signed.
+
+            Built from `${{ github.sha }}`.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

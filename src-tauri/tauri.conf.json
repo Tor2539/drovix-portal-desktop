@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Drovix Portal",
+  "version": "0.1.0",
+  "identifier": "com.drovix.portal",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Drovix Portal",
+        "url": "https://portal.drovix.com",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "theme": "Dark",
+        "titleBarStyle": "Visible"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Drovix",
+    "copyright": "© 2026 Drovix",
+    "category": "Finance",
+    "shortDescription": "Drovix Portal — institutional client portal",
+    "longDescription": "Desktop client for portal.drovix.com. Provides a focused, distraction-free window for the Drovix institutional client portal on Windows, macOS, and Linux.",
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY5NTFFODVGQkM4ODM4MDcKUldRSE9JaThYK2hSK1NHZENkQi9FLzgvaW9NS1RKVTVLR1B0b05leUNxQktFUGt5TUFsY0xVdmcK",
+      "endpoints": [
+        "https://github.com/Tor2539/drovix-portal-desktop/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
