@@ -1,6 +1,6 @@
 [package]
 name = "drovix-portal-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Drovix Portal — desktop client for portal.drovix.com"
 authors = ["Drovix"]
 edition = "2021"
