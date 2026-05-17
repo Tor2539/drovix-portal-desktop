@@ -94,23 +94,19 @@ jobs:
       - name: Build Tauri bundles
         uses: tauri-apps/tauri-action@v0
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Tauri updater signing — present from day one so the public key
           # embedded in the app matches the artifacts we publish. The
           # private key + password come from repo secrets.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Optional: Apple Developer code signing + notarization. Leave
-          # these unset for unsigned releases — the action skips signing
-          # when they're missing.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Optional: Windows EV code signing (set when the cert lands).
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # Code signing secrets (Apple Developer Program, Windows EV cert)
+          # are intentionally NOT plumbed in yet. tauri-action interprets an
+          # empty APPLE_CERTIFICATE as "try to sign with an empty keychain
+          # entry" and fails the macOS build, so the cleanest way to ship
+          # unsigned releases is to leave the env vars unset entirely.
+          # When the certs are bought, add them here and the workflow will
+          # start producing signed + notarized builds with no other changes.
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Drovix Portal ${{ github.ref_name }}"
