@@ -1,0 +1,6 @@
+[2026-09-20][21:19:42][drovix_portal_desktop_lib][INFO] Drovix Portal desktop 0.2.1 starting, url=https://portal.drovix.com
+[2026-09-20][21:19:42][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/
+[2026-09-20][21:19:43][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/portal/dashboard
+[2026-09-20][21:19:43][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/login
+[2026-09-20][21:19:45][drovix_portal_desktop_lib][INFO] updater: checking (current 0.2.1)
+[2026-09-20][21:19:46][drovix_portal_desktop_lib][INFO] updater: no update available
