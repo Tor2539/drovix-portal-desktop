@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload smoke-run bundles as workflow artifacts
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: drovix-portal-${{ matrix.target }}
           if-no-files-found: error
