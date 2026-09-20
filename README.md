@@ -153,7 +153,28 @@ wired until the certificates are bought.
 
 ## Evidence
 
-<!-- EVIDENCE -->
+Recorded 2026-09-21 (lane P11, PR [#1](https://github.com/Tor2539/drovix-portal-desktop/pull/1)).
+Times below are UTC as printed by GitHub / the app log.
+
+| # | Claim | Evidence |
+| --- | --- | --- |
+| 1 | Policy unit tests pass | `cargo test` in `src-tauri`: `test result: ok. 4 passed; 0 failed` (also the `Rust unit tests` step of every CI run below) |
+| 2 | `workflow_dispatch` smoke run, 3 green jobs, no release created | run [35529502572](https://github.com/Tor2539/drovix-portal-desktop/actions/runs/35529502572) on `63101b2`: windows-latest / macos-latest / ubuntu-22.04 all `success`; artifacts `drovix-portal-x86_64-pc-windows-msvc` (4.27 MB), `-aarch64-apple-darwin` (5.98 MB), `-x86_64-unknown-linux-gnu` (97.3 MB); `gh release list` afterwards still showed only v0.1.1 / v0.1.0 (no `main` release). One annotation (upload-artifact@v4 on Node 20) fixed by `f9d214c`. |
+| 3 | Second smoke run on the final workflow, zero annotations | run [35530174083](https://github.com/Tor2539/drovix-portal-desktop/actions/runs/35530174083) on `f9d214c`: 3 × `success`, no annotations, no release |
+| 4 | Tag build produces the release with `latest.json` | tag `v0.2.0` → `f9d214c`; run [35530178290](https://github.com/Tor2539/drovix-portal-desktop/actions/runs/35530178290): 3 × `success`, no annotations; draft release created with 14 assets (`.msi`, `-setup.exe`, `.dmg`, `.app.tar.gz`, `.AppImage`, `.deb`, `.rpm`, 7 × `.sig`, `latest.json` 5785 B) |
+| 5 | Release published, updater endpoint serves it | `gh release edit v0.2.0 --draft=false` at 18:59:40Z → [releases/tag/v0.2.0](https://github.com/Tor2539/drovix-portal-desktop/releases/tag/v0.2.0). `curl -sL .../releases/latest/download/latest.json` → `version: 0.2.0`, `windows-x86_64` → `Drovix.Portal_0.2.0_x64-setup.exe` (NSIS preferred), plus msi / darwin-aarch64 / linux appimage+deb+rpm entries, every one with a minisign signature |
+| 6 | Install on the Windows workstation reaches `/login` | Local build of the same source (`npx tauri build --bundles nsis,msi`, updater artifacts off because the signing key is CI-only) → `Drovix Portal_0.2.0_x64-setup.exe` (sha256 `2a6ec30b…9501`) installed with `/S`; registry `HKCU\...\Uninstall` shows `Drovix Portal 0.2.0`, `C:\Users\<user>\AppData\Local\Drovix Portal\drovix-portal-desktop.exe` ProductVersion 0.2.0. Launched: PowerShell `MainWindowTitle = "Drovix Portal"`; screenshot [docs/evidence/2026-09-21-v0.2.0-windows-login.png](docs/evidence/2026-09-21-v0.2.0-windows-login.png) shows the login form; app log [docs/evidence/2026-09-21-v0.2.0-windows-startup.log](docs/evidence/2026-09-21-v0.2.0-windows-startup.log): `navigation: https://portal.drovix.com/login?redirect=%2Fportal%2Fdashboard` then `updater: no update available` (v0.1.1 was latest at that moment) |
+| 7 | Rust-side updater finds and offers a real release | A throw-away binary built with `--config '{"version":"0.1.9"}'` (not installed, not published) started after v0.2.0 was public: log [docs/evidence/2026-09-21-v0.1.9-test-binary-updater.log](docs/evidence/2026-09-21-v0.1.9-test-binary-updater.log) `updater: 0.1.9 -> 0.2.0 available (…/v0.2.0/Drovix.Portal_0.2.0_x64-setup.exe)` and the native dialog [docs/evidence/2026-09-21-v0.1.9-test-binary-update-dialog.png](docs/evidence/2026-09-21-v0.1.9-test-binary-update-dialog.png) ("Update now" / "Later"). The install path itself was not exercised on the workstation (process killed at the dialog). |
+| 8 | Remote origin has no IPC | `src-tauri/capabilities/default.json` has no `remote` key (Tauri 2 default: remote URLs get no IPC); the only edit is the local-window permission rename `shell:allow-open` → `opener:allow-open-url` |
+
+Not verified at runtime (unit-tested only): the `on_new_window` routing of a
+real `target="_blank"` click inside the installed app. The handler is wired
+in `build_main_window` and the policy has tests; a manual click test on the
+portal's Terms/Privacy links is the remaining check.
+
+Secrets used: none committed. The workflow reads `TAURI_SIGNING_PRIVATE_KEY`
+and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` from repo secrets; the local build
+ran without them.
 
 ## Related repos
 
