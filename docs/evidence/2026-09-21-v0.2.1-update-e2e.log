@@ -1,0 +1,14 @@
+[2026-09-20][21:13:45][drovix_portal_desktop_lib][INFO] Drovix Portal desktop 0.1.9 starting, url=https://portal.drovix.com
+[2026-09-20][21:13:46][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/
+[2026-09-20][21:13:46][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/portal/dashboard
+[2026-09-20][21:13:46][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/login
+[2026-09-20][21:13:49][drovix_portal_desktop_lib][INFO] updater: checking (current 0.1.9)
+[2026-09-20][21:13:50][drovix_portal_desktop_lib][INFO] updater: 0.1.9 -> 0.2.0 available (https://github.com/Tor2539/drovix-portal-desktop/releases/download/v0.2.0/Drovix.Portal_0.2.0_x64-setup.exe)
+[2026-09-20][21:19:02][drovix_portal_desktop_lib][INFO] updater: downloaded 1893652 bytes
+[2026-09-20][21:19:02][drovix_portal_desktop_lib][INFO] updater: download finished, installing
+[2026-09-20][21:19:05][drovix_portal_desktop_lib][INFO] Drovix Portal desktop 0.2.0 starting, url=https://portal.drovix.com
+[2026-09-20][21:19:06][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/
+[2026-09-20][21:19:06][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/portal/dashboard
+[2026-09-20][21:19:06][drovix_portal_desktop_lib][INFO] navigation: https://portal.drovix.com/login?redirect=%2Fportal%2Fdashboard
+[2026-09-20][21:19:09][drovix_portal_desktop_lib][INFO] updater: checking (current 0.2.0)
+[2026-09-20][21:19:10][drovix_portal_desktop_lib][INFO] updater: no update available
