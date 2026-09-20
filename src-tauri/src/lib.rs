@@ -108,7 +108,9 @@ fn build_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .theme(Some(Theme::Dark))
         .on_navigation(|url| {
             let allowed = allow_navigation(url);
-            if !allowed {
+            if allowed {
+                log::info!("navigation: {url}");
+            } else {
                 log::warn!("blocked top-level navigation to {url}");
             }
             allowed
