@@ -13,20 +13,24 @@
 //   page tries to open in a new window (`target="_blank"`, `window.open`) is
 //   routed: same-origin portal links navigate the main window in place,
 //   anything else goes to the user's default browser. The webview never
-//   spawns a second browser-style popup.
+//   spawns a second browser-style popup. Top-level `mailto:` / `tel:`
+//   navigations (plain `<a href="mailto:...">`, `location.href = "mailto:..."`)
+//   are handed to the OS handler and the webview stays where it is.
 //
 // * The updater runs on the Rust side, once, shortly after startup. The
 //   remote page has NO IPC access: `capabilities/default.json` has no
-//   `remote.urls` block, so `updater:*`, `process:*` and `opener:*` commands
-//   are unreachable from portal.drovix.com. The page cannot trigger, spoof or
-//   suppress an update; only this binary can.
+//   `remote.urls` block and grants only `core:default`, so no `updater:*`,
+//   `process:*`, `dialog:*` or `opener:*` command exists for
+//   portal.drovix.com to call. The page cannot trigger, spoof or suppress an
+//   update; only this binary can.
 //
 // * Logging goes to the platform log dir (Windows:
 //   %LOCALAPPDATA%\com.drovix.portal\logs\drovix-portal.log) so updater and
-//   navigation decisions are traceable after the fact. The binary is built
-//   with `windows_subsystem = "windows"`, so stdout is not visible anyway.
-
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+//   navigation decisions are traceable after the fact. URLs are written
+//   without query string / fragment (see `loggable`) because the portal
+//   carries one-time secrets there. The stdout target only matters for
+//   `tauri dev`: release builds are GUI-subsystem binaries (the
+//   `windows_subsystem` attribute lives in `main.rs`, where Rust honours it).
 
 use tauri::{
     webview::NewWindowResponse, AppHandle, Manager, Runtime, Theme, Url, WebviewUrl,
@@ -73,29 +77,58 @@ pub fn classify_new_window(url: &Url) -> NewWindowPolicy {
     }
 }
 
-/// Top-level navigation policy for the main webview. OAuth / KYC / payment
-/// providers redirect the top frame across origins, so cross-origin https is
-/// allowed; anything that is not https (or the dev-only http loopback) is
-/// refused so the webview can never be steered to file:, data: or a custom
-/// scheme.
-pub fn allow_navigation(url: &Url) -> bool {
+/// What to do with a top-level navigation of the main webview.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NavigationPolicy {
+    /// Let the webview navigate: `https` anywhere (OAuth / KYC / payment
+    /// providers redirect the top frame across origins), `http` on the
+    /// dev-only loopback, and `about:` (WebView2 / WebKit use `about:blank`
+    /// internally).
+    Allow,
+    /// `mailto:` / `tel:` reached by a plain anchor or `location.href`
+    /// assignment: hand the URL to the OS handler and keep the webview where
+    /// it is. The portal uses these for its compliance / support contacts.
+    OpenExternally,
+    /// Refuse so the webview can never be steered to `file:`, `data:`,
+    /// `javascript:` or a custom scheme.
+    Deny,
+}
+
+pub fn classify_navigation(url: &Url) -> NavigationPolicy {
     match url.scheme() {
-        "https" => true,
-        "http" => matches!(url.host_str(), Some("localhost") | Some("127.0.0.1")),
-        "about" => true,
-        _ => false,
+        "https" | "about" => NavigationPolicy::Allow,
+        "http" if matches!(url.host_str(), Some("localhost") | Some("127.0.0.1")) => {
+            NavigationPolicy::Allow
+        }
+        "mailto" | "tel" => NavigationPolicy::OpenExternally,
+        _ => NavigationPolicy::Deny,
+    }
+}
+
+/// URL as it is written to the log file: origin (scheme, host, non-default
+/// port) plus path for http(s), the bare scheme for everything else. Query
+/// strings and fragments are dropped because the portal carries one-time
+/// secrets in them (`/set-password?code=`, `/apply/verify?token=`) and the
+/// log is a plaintext file in the user profile; `mailto:` / `tel:` paths are
+/// contact details and are dropped for the same reason.
+pub fn loggable(url: &Url) -> String {
+    match url.scheme() {
+        "http" | "https" => format!("{}{}", url.origin().ascii_serialization(), url.path()),
+        "about" => url.as_str().to_owned(),
+        scheme => format!("{scheme}:<redacted>"),
     }
 }
 
 fn open_externally<R: Runtime>(app: &AppHandle<R>, url: &Url) {
     match app.opener().open_url(url.as_str(), None::<&str>) {
-        Ok(()) => log::info!("opened externally: {url}"),
-        Err(e) => log::warn!("failed to open {url} externally: {e}"),
+        Ok(()) => log::info!("opened externally: {}", loggable(url)),
+        Err(e) => log::warn!("failed to open {} externally: {e}", loggable(url)),
     }
 }
 
 fn build_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let portal = Url::parse(PORTAL_ORIGIN).expect("PORTAL_ORIGIN is a valid URL");
+    let handle_for_navigation = app.clone();
     let handle_for_new_window = app.clone();
 
     WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::External(portal))
@@ -106,31 +139,43 @@ fn build_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .resizable(true)
         .decorations(true)
         .theme(Some(Theme::Dark))
-        .on_navigation(|url| {
-            let allowed = allow_navigation(url);
-            if allowed {
-                log::info!("navigation: {url}");
-            } else {
-                log::warn!("blocked top-level navigation to {url}");
+        .on_navigation(move |url| {
+            let app = &handle_for_navigation;
+            match classify_navigation(url) {
+                NavigationPolicy::Allow => {
+                    log::info!("navigation: {}", loggable(url));
+                    true
+                }
+                NavigationPolicy::OpenExternally => {
+                    log::info!("top-level {} handed to the OS handler", loggable(url));
+                    open_externally(app, url);
+                    false
+                }
+                NavigationPolicy::Deny => {
+                    log::warn!("blocked top-level navigation to {}", loggable(url));
+                    false
+                }
             }
-            allowed
         })
         .on_new_window(move |url, _features| {
             let app = &handle_for_new_window;
             match classify_new_window(&url) {
                 NewWindowPolicy::NavigateMain => {
-                    log::info!("new-window request for portal URL, navigating main: {url}");
+                    log::info!(
+                        "new-window request for portal URL, navigating main: {}",
+                        loggable(&url)
+                    );
                     match app.get_webview_window(MAIN_WINDOW_LABEL) {
                         Some(main) => {
                             if let Err(e) = main.navigate(url.clone()) {
-                                log::warn!("navigate main to {url} failed: {e}");
+                                log::warn!("navigate main to {} failed: {e}", loggable(&url));
                             }
                         }
-                        None => log::warn!("main window missing; dropping {url}"),
+                        None => log::warn!("main window missing; dropping {}", loggable(&url)),
                     }
                 }
                 NewWindowPolicy::OpenExternally => open_externally(app, &url),
-                NewWindowPolicy::Deny => log::warn!("denied new window for {url}"),
+                NewWindowPolicy::Deny => log::warn!("denied new window for {}", loggable(&url)),
             }
             // Never let the webview spawn its own popup window.
             NewWindowResponse::Deny
@@ -140,6 +185,10 @@ fn build_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 /// Rust-side updater: check once at startup, ask the user, install, restart.
+/// `check()` only fetches and parses `latest.json`; the minisign signature of
+/// the downloaded bundle is verified against `plugins.updater.pubkey` inside
+/// `download_and_install`, so a key mismatch surfaces as `updater: check
+/// failed` after the user clicks "Update now", never as a silent install.
 /// Errors are logged, never surfaced as a crash - a broken updater endpoint
 /// must not stop the desk from reaching the portal.
 async fn check_for_updates<R: Runtime>(app: AppHandle<R>) -> tauri_plugin_updater::Result<()> {
@@ -257,27 +306,85 @@ mod tests {
             "https://docs.drovix.com/x",
             "https://portal.drovix.com.evil.example/",
             "https://evil.example/?u=https://portal.drovix.com",
+            "https://portal.drovix.com:8443/portal/dashboard",
             "http://portal.drovix.com/",
             "mailto:support@drovix.com",
+            "tel:+41445551234",
         ] {
-            assert_eq!(classify_new_window(&u(s)), NewWindowPolicy::OpenExternally, "{s}");
+            assert_eq!(
+                classify_new_window(&u(s)),
+                NewWindowPolicy::OpenExternally,
+                "{s}"
+            );
         }
     }
 
     #[test]
     fn dangerous_schemes_are_denied() {
-        for s in ["file:///C:/Windows/system.ini", "javascript:alert(1)", "data:text/html,hi"] {
+        for s in [
+            "file:///C:/Windows/system.ini",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+        ] {
             assert_eq!(classify_new_window(&u(s)), NewWindowPolicy::Deny, "{s}");
         }
     }
 
     #[test]
     fn top_level_navigation_policy() {
-        assert!(allow_navigation(&u("https://portal.drovix.com/login")));
-        assert!(allow_navigation(&u("https://accounts.google.com/o/oauth2/auth")));
-        assert!(allow_navigation(&u("http://localhost:3000/login")));
-        assert!(!allow_navigation(&u("http://portal.drovix.com/login")));
-        assert!(!allow_navigation(&u("file:///etc/passwd")));
-        assert!(!allow_navigation(&u("javascript:void(0)")));
+        for s in [
+            "https://portal.drovix.com/login",
+            "https://accounts.google.com/o/oauth2/auth",
+            "http://localhost:3000/login",
+            "http://127.0.0.1:3000/login",
+            "about:blank",
+        ] {
+            assert_eq!(classify_navigation(&u(s)), NavigationPolicy::Allow, "{s}");
+        }
+        for s in [
+            "http://portal.drovix.com/login",
+            "file:///etc/passwd",
+            "javascript:void(0)",
+            "data:text/html,hi",
+            "drovix://x",
+        ] {
+            assert_eq!(classify_navigation(&u(s)), NavigationPolicy::Deny, "{s}");
+        }
+    }
+
+    #[test]
+    fn top_level_mailto_and_tel_go_to_the_os() {
+        // completion-gate.tsx / kyb-verification-widget.tsx use plain anchors,
+        // onboarding/page.tsx assigns `location.href = "mailto:..."`: all of
+        // them arrive here as top-level navigations, not new-window requests.
+        for s in ["mailto:compliance@drovix.com", "tel:+41445551234"] {
+            assert_eq!(
+                classify_navigation(&u(s)),
+                NavigationPolicy::OpenExternally,
+                "{s}"
+            );
+        }
+    }
+
+    #[test]
+    fn log_lines_drop_query_fragment_and_contact_details() {
+        assert_eq!(
+            loggable(&u("https://portal.drovix.com/set-password?code=SECRET#x")),
+            "https://portal.drovix.com/set-password"
+        );
+        assert_eq!(
+            loggable(&u("https://portal.drovix.com:443/login?redirect=%2Fportal")),
+            "https://portal.drovix.com/login"
+        );
+        assert_eq!(
+            loggable(&u("http://localhost:3000/apply/verify?token=SECRET")),
+            "http://localhost:3000/apply/verify"
+        );
+        assert_eq!(
+            loggable(&u("mailto:compliance@drovix.com")),
+            "mailto:<redacted>"
+        );
+        assert_eq!(loggable(&u("tel:+41445551234")), "tel:<redacted>");
+        assert_eq!(loggable(&u("about:blank")), "about:blank");
     }
 }

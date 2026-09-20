@@ -1,12 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the Drovix Portal desktop app.",
+  "description": "Default capabilities for the Drovix Portal desktop app. The only window loads the remote portal origin, which gets no IPC (no `remote.urls` block); updater, dialog, opener and process restart are driven from Rust and need no command permissions, so none are granted.",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "opener:allow-open-url",
-    "process:default",
-    "updater:default"
+    "core:default"
   ]
 }
